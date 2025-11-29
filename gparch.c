@@ -206,35 +206,17 @@ static bool core_environment(unsigned cmd, void *data)
 static void core_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch)
 {
 	gp_pixmap pix;
-	uint8_t *data_cpy = NULL;
 
 	if (!data)
 		return;
 
 	gp_fill(backend->pixmap, 0x000000);
 
-	if (pixel_type == GP_PIXEL_RGB565) {
-		data_cpy = malloc(pitch * height);
-
-		memcpy(data_cpy, data, pitch * height);
-
-		unsigned int h, i;
-
-		for (h = 0; h < height; h++) {
-			uint8_t *row = data_cpy + h * pitch;
-
-			for (i = 0; i < pitch/2; i++)
-				GP_SWAP(row[2*i], row[2*i+1]);
-		}
-
-		gp_pixmap_init_ex(&pix, width, height, pixel_type, pitch, data_cpy, 0);
-	} else {
-		gp_pixmap_init_ex(&pix, width, height, pixel_type, pitch, (void*)data, 0);
-	}
+	gp_pixmap_init_ex(&pix, width, height, pixel_type, pitch, (void*)data, 0);
 
 	int rat = GP_MIN(gp_backend_w(backend)/width, gp_backend_h(backend)/height);
 
-	if (rat > 1) {
+	if (rat >= 1) {
 		gp_pixmap dst;
 
 		gp_coord x_off = (gp_backend_w(backend) - width * rat) / 2;
@@ -244,16 +226,17 @@ static void core_video_refresh(const void *data, unsigned width, unsigned height
 
 		gp_pixmap *src = gp_pixmap_convert_alloc(&pix, gp_backend_pixel_type(backend));
 
-		gp_filter_resize(src, &dst, GP_INTERP_NN, NULL);
+		if (rat > 1)
+			gp_filter_resize(src, &dst, GP_INTERP_NN, NULL);
+		else
+			gp_blit_xywh(src, 0, 0, width, height, &dst, 0, 0);
 
 		gp_pixmap_free(src);
 	} else {
-		gp_blit_xyxy(&pix, 0, 0, width-1, height-1, backend->pixmap, 0, 0);
+		//TODO: Resize down!
 	}
 
 	gp_backend_flip(backend);
-
-	free(data_cpy);
 }
 
 static int map_joypad_key(uint32_t key)
