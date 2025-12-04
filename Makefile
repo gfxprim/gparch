@@ -1,7 +1,7 @@
 CFLAGS?=-W -Wall -Wextra -O2 -ggdb
 CFLAGS+=$(shell gfxprim-config --cflags)
 BIN=gparch
-$(BIN): LDLIBS=-lasound -lgfxprim $(shell gfxprim-config --libs-backends)
+$(BIN): LDLIBS=-ldl -lasound -lgfxprim $(shell gfxprim-config --libs-backends)
 SOURCES=$(wildcard *.c)
 DEP=$(SOURCES:.c=.dep)
 OBJ=$(SOURCES:.c=.o)
@@ -18,7 +18,7 @@ $(BIN): $(OBJ)
 install:
 	install -d $(DESTDIR)/usr/bin/
 	install $(BIN) -t $(DESTDIR)/usr/bin/
-	install -d $(DESTDIR)/usr/share/applications/
+#	install -d $(DESTDIR)/usr/share/applications/
 #	install -m 644 $(BIN).desktop -t $(DESTDIR)/usr/share/applications/
 #	install -d $(DESTDIR)/usr/share/$(BIN)/
 #	install -m 644 $(BIN).png -t $(DESTDIR)/usr/share/$(BIN)/
