@@ -81,7 +81,8 @@ static int audio_init(int frequency)
 
 static void audio_deinit(void)
 {
-	snd_pcm_close(alsa_pcm);
+	if (alsa_pcm)
+		snd_pcm_close(alsa_pcm);
 }
 
 static size_t audio_write(const void *buf, unsigned frames)
@@ -421,7 +422,7 @@ static void core_load(const char *sofile)
 static int core_load_game(const char *filename)
 {
 	struct retro_system_av_info av = {};
-	struct retro_system_info system = {};
+	struct retro_system_info sysinfo = {};
 	struct retro_game_info info = {.path = filename, .data = NULL};
 	FILE *file;
 
@@ -435,9 +436,9 @@ static int core_load_game(const char *filename)
 	info.size = ftell(file);
 	rewind(file);
 
-	core_retro.retro_get_system_info(&system);
+	core_retro.retro_get_system_info(&sysinfo);
 
-	if (!system.need_fullpath) {
+	if (!sysinfo.need_fullpath) {
 		info.data = malloc(info.size);
 		if (!info.data) {
 			fprintf(stderr, "Malloc failed\n");
@@ -475,14 +476,45 @@ static void core_unload(void)
 		dlclose(core_retro.handle);
 }
 
+static void help(char *bin_name)
+{
+
+	fprintf(stderr, "usage: %s [-b backend_opts] <core.so> <game>\n", bin_name);
+
+	fprintf(stderr, "\nAvailable backends:\n\n");
+	gp_backend_init("help", 0, 0, "gpretro");
+}
+
+static void do_exit(int ret_val)
+{
+	core_unload();
+	audio_deinit();
+	gp_backend_exit(backend);
+	exit(ret_val);
+}
+
 int main(int argc, char *argv[])
 {
-	if (argc < 3) {
-		fprintf(stderr, "usage: %s <core.so> <game>", argv[0]);
-		exit(1);
+	const char *backend_opts = NULL;
+	int opt;
+
+	while ((opt = getopt(argc, argv, "b:h")) != -1) {
+		switch (opt) {
+		case 'b':
+			backend_opts = optarg;
+		break;
+		case 'h':
+			help(argv[0]);
+			return 0;
+		default:
+			help(argv[0]);
+			return 1;
+		}
 	}
 
-	backend = gp_backend_init(NULL, 0, 0, "gpretro");
+	backend = gp_backend_init(backend_opts, 0, 0, "gpretro");
+	if (!backend)
+		return 1;
 
 	gp_fill(backend->pixmap, 0x000000);
 	gp_print(backend->pixmap, NULL, gp_backend_w(backend)/2, gp_backend_h(backend)/2,
@@ -490,18 +522,21 @@ int main(int argc, char *argv[])
 		 "Loading '%s'", argv[2]);
 	gp_backend_flip(backend);
 
-	core_load(argv[1]);
+	if (optind >= argc) {
+		help(argv[0]);
+		do_exit(1);
+	}
 
-	if (core_load_game(argv[2]))
-		exit(1);
+	core_load(argv[optind++]);
+
+	if (optind < argc) {
+		if (core_load_game(argv[optind]))
+			do_exit(1);
+	}
 
 	while (!should_exit)
 		core_retro.retro_run();
 
-	core_unload();
-	audio_deinit();
-
-	gp_backend_exit(backend);
-
+	do_exit(0);
 	return 0;
 }
